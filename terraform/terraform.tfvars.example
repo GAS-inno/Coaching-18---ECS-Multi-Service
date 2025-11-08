@@ -1,0 +1,22 @@
+# AWS Region - Update this to your preferred region
+aws_region = "us-east-1"
+
+# Project name - This will be used as a prefix for all resources
+project_name = "ecs-multi-service"
+
+# Existing VPC name to use
+vpc_name = "ce11-tf-vpc-97"
+
+# Docker images for services
+# TODO: Update these with your actual ECR repository URLs or Docker Hub images
+# Example: "123456789012.dkr.ecr.us-east-1.amazonaws.com/s3-service:latest"
+s3_service_image  = "YOUR_ECR_REPO/s3-service:latest"
+sqs_service_image = "YOUR_ECR_REPO/sqs-service:latest"
+
+# Tags to apply to all resources
+tags = {
+  Project     = "ECS-Multi-Service"
+  Environment = "Development"
+  ManagedBy   = "Terraform"
+  Owner       = "YourName"
+}
