@@ -1,5 +1,6 @@
 name: Deploy S3 Service to Amazon ECS
 
+# This workflow deploys the S3 service to ECS with Terraform infrastructure provisioning
 on:
   workflow_dispatch:
   push:
