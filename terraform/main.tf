@@ -362,6 +362,99 @@ resource "aws_cloudwatch_log_group" "sqs_service" {
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}
 
+# ECS Task Definitions
+resource "aws_ecs_task_definition" "s3_service" {
+  family                   = "${var.project_name}-s3-service"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "s3-app"
+      image     = var.s3_service_image
+      essential = true
+      portMappings = [
+        {
+          containerPort = 5001
+          protocol      = "tcp"
+        }
+      ]
+      environment = [
+        {
+          name  = "AWS_REGION"
+          value = var.aws_region
+        },
+        {
+          name  = "BUCKET_NAME"
+          value = aws_s3_bucket.uploads.id
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.s3_service.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = merge(var.tags, {
+    Service = "s3-service"
+  })
+}
+
+resource "aws_ecs_task_definition" "sqs_service" {
+  family                   = "${var.project_name}-sqs-service"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "sqs-app"
+      image     = var.sqs_service_image
+      essential = true
+      portMappings = [
+        {
+          containerPort = 5002
+          protocol      = "tcp"
+        }
+      ]
+      environment = [
+        {
+          name  = "AWS_REGION"
+          value = var.aws_region
+        },
+        {
+          name  = "QUEUE_URL"
+          value = aws_sqs_queue.messages.url
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.sqs_service.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = merge(var.tags, {
+    Service = "sqs-service"
+  })
+}
+
 # ECS Cluster with services
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
@@ -383,43 +476,8 @@ module "ecs" {
       cpu    = 256
       memory = 512
 
-      # Container definition(s)
-      container_definitions = {
-        s3-app = {
-          essential = true
-          image     = var.s3_service_image
-          port_mappings = [
-            {
-              name          = "s3-app"
-              containerPort = 5001
-              protocol      = "tcp"
-            }
-          ]
-
-          environment = [
-            {
-              name  = "AWS_REGION"
-              value = var.aws_region
-            },
-            {
-              name  = "BUCKET_NAME"
-              value = aws_s3_bucket.uploads.id
-            }
-          ]
-
-          # CloudWatch Logs
-          log_configuration = {
-            logDriver = "awslogs"
-            options = {
-              "awslogs-group"         = aws_cloudwatch_log_group.s3_service.name
-              "awslogs-region"        = var.aws_region
-              "awslogs-stream-prefix" = "ecs"
-            }
-          }
-
-          readonly_root_filesystem = false
-        }
-      }
+      # Reference existing task definition
+      task_definition_arn = aws_ecs_task_definition.s3_service.arn
 
       # Load balancer configuration
       load_balancer = {
@@ -450,6 +508,7 @@ module "ecs" {
       }
 
       # Task definition
+      create_task_definition       = false
       requires_compatibilities     = ["FARGATE"]
       create_task_exec_iam_role    = false
       task_exec_iam_role_arn       = aws_iam_role.ecs_task_execution_role.arn
@@ -468,43 +527,8 @@ module "ecs" {
       cpu    = 256
       memory = 512
 
-      # Container definition(s)
-      container_definitions = {
-        sqs-app = {
-          essential = true
-          image     = var.sqs_service_image
-          port_mappings = [
-            {
-              name          = "sqs-app"
-              containerPort = 5002
-              protocol      = "tcp"
-            }
-          ]
-
-          environment = [
-            {
-              name  = "AWS_REGION"
-              value = var.aws_region
-            },
-            {
-              name  = "QUEUE_URL"
-              value = aws_sqs_queue.messages.url
-            }
-          ]
-
-          # CloudWatch Logs
-          log_configuration = {
-            logDriver = "awslogs"
-            options = {
-              "awslogs-group"         = aws_cloudwatch_log_group.sqs_service.name
-              "awslogs-region"        = var.aws_region
-              "awslogs-stream-prefix" = "ecs"
-            }
-          }
-
-          readonly_root_filesystem = false
-        }
-      }
+      # Reference existing task definition
+      task_definition_arn = aws_ecs_task_definition.sqs_service.arn
 
       # Load balancer configuration
       load_balancer = {
@@ -535,6 +559,7 @@ module "ecs" {
       }
 
       # Task definition
+      create_task_definition       = false
       requires_compatibilities     = ["FARGATE"]
       create_task_exec_iam_role    = false
       task_exec_iam_role_arn       = aws_iam_role.ecs_task_execution_role.arn
