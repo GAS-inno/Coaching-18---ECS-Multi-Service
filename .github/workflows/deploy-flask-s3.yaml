@@ -9,6 +9,7 @@ on:
       - feature/ysim
     paths:
       - 'flask-s3-service/**'
+      - 'terraform/**'
       - '.github/workflows/deploy-flask-s3.yaml'
 
 jobs:

@@ -8,6 +8,7 @@ on:
       - feature/ysim
     paths:
       - 'flask-sqs-service/**'
+      - 'terraform/**'
       - '.github/workflows/deploy-flask-sqs.yaml'
 
 jobs:
