@@ -7,6 +7,12 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket = "sctp-ce11-tfstate"
+    key    = "yeefei-coaching-tf-ci.tfstate"
+    region = "us-east-1"
+  }
 }
 
 provider "aws" {
