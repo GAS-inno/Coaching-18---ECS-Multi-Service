@@ -40,8 +40,8 @@ jobs:
         context: ./flask-sqs-service
         push: true
         tags: |
-          ${{ steps.login-ecr.outputs.registry }}/${{ vars.SQS_ECR_REPOSITORY }}:${{ github.sha }}
-          ${{ steps.login-ecr.outputs.registry }}/${{ vars.SQS_ECR_REPOSITORY }}:latest
+          ${{ steps.login-ecr.outputs.registry }}/${{ vars.SQS_ECR_REPOSITORY || 'sqs-service' }}:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ vars.SQS_ECR_REPOSITORY || 'sqs-service' }}:latest
         platforms: linux/amd64
         cache-from: type=gha
         cache-to: type=gha,mode=max
@@ -49,7 +49,7 @@ jobs:
     - name: Download task definition
       run: |
         aws ecs describe-task-definition \
-          --task-definition ${{ vars.SQS_TASK_DEF }} \
+          --task-definition ${{ vars.SQS_TASK_DEF || 'ecs-multi-service-sqs-service' }} \
           --query taskDefinition > task-definition.json
 
     - name: Fill in the new image ID in the Amazon ECS task definition
@@ -57,13 +57,13 @@ jobs:
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
         task-definition: task-definition.json
-        container-name: ${{ vars.SQS_CONTAINER_NAME }}
-        image: ${{ steps.login-ecr.outputs.registry }}/${{ vars.SQS_ECR_REPOSITORY }}:${{ github.sha }}
+        container-name: ${{ vars.SQS_CONTAINER_NAME || 'sqs-app' }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ vars.SQS_ECR_REPOSITORY || 'sqs-service' }}:${{ github.sha }}
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ vars.SQS_ECS_SERVICE }}
-        cluster: ${{ vars.ECS_CLUSTER }}
+        service: ${{ vars.SQS_ECS_SERVICE || 'sqs-service' }}
+        cluster: ${{ vars.ECS_CLUSTER || 'ecs-multi-service-cluster' }}
         wait-for-service-stability: true

@@ -40,8 +40,8 @@ jobs:
         context: ./flask-s3-service
         push: true
         tags: |
-          ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY }}:${{ github.sha }}
-          ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY }}:latest
+          ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:latest
         platforms: linux/amd64
         cache-from: type=gha
         cache-to: type=gha,mode=max
@@ -49,7 +49,7 @@ jobs:
     - name: Download task definition
       run: |
         aws ecs describe-task-definition \
-          --task-definition ${{ vars.S3_TASK_DEF }} \
+          --task-definition ${{ vars.S3_TASK_DEF || 'ecs-multi-service-s3-service' }} \
           --query taskDefinition > task-definition.json
 
     - name: Fill in the new image ID in the Amazon ECS task definition
@@ -57,13 +57,13 @@ jobs:
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
         task-definition: task-definition.json
-        container-name: ${{ vars.S3_CONTAINER_NAME }}
-        image: ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY }}:${{ github.sha }}
+        container-name: ${{ vars.S3_CONTAINER_NAME || 's3-app' }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:${{ github.sha }}
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ vars.S3_ECS_SERVICE }}
-        cluster: ${{ vars.ECS_CLUSTER }}
+        service: ${{ vars.S3_ECS_SERVICE || 's3-service' }}
+        cluster: ${{ vars.ECS_CLUSTER || 'ecs-multi-service-cluster' }}
         wait-for-service-stability: true
