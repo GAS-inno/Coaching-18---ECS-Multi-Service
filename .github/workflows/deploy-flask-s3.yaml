@@ -1,59 +1,177 @@
-name: S3 Service CI/CD
+name: Deploy S3 Service to Amazon ECS
 
+# This workflow deploys the S3 service to ECS with Terraform infrastructure provisioning
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'feature/**'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'feature/**'
   workflow_dispatch:
-
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ecs-demo-s3-service
-  ECS_CLUSTER: ecs-demo-cluster
-  ECS_SERVICE: s3-service
+  push:
+    branches:
+      - main
+      - feature/saw
+    paths:
+      - 'flask-s3-service/**'
+      - 'terraform/**'
+      - '.github/workflows/deploy-flask-s3.yaml'
 
 jobs:
-  build-and-deploy:
-    name: Build and Deploy
+  terraform:
+    name: Terraform Infrastructure
     runs-on: ubuntu-latest
+    environment: dev
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
 
-      - name: Build, tag, and push image to Amazon ECR
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        working-directory: s3-service
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
 
-      - name: Deploy to ECS
-        if: github.ref == 'refs/heads/main'
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
-            --force-new-deployment
+    - name: Get AWS Account ID
+      id: account-id
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+
+    - name: Terraform Apply
+      working-directory: ./terraform
+      run: |
+        terraform apply -auto-approve \
+          -var="project_name=yeefei-ecs-multi-svc" \
+          -var="s3_service_image=${{ steps.account-id.outputs.account_id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:latest" \
+          -var="sqs_service_image=${{ steps.account-id.outputs.account_id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ vars.SQS_ECR_REPOSITORY || 'sqs-service' }}:latest"
+
+  deploy:
+    name: Deploy S3 Service
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: terraform
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Create ECR repository if it doesn't exist
+      run: |
+        aws ecr describe-repositories --repository-names ${{ vars.S3_ECR_REPOSITORY || 's3-service' }} || \
+        aws ecr create-repository --repository-name ${{ vars.S3_ECR_REPOSITORY || 's3-service' }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build and push Docker image to Amazon ECR
+      uses: docker/build-push-action@v4
+      with:
+        context: ./flask-s3-service
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:latest
+        platforms: linux/amd64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Download task definition
+      id: download-task-def
+      continue-on-error: true
+      run: |
+        aws ecs describe-task-definition \
+          --task-definition ${{ vars.S3_TASK_DEF || 'ecs-multi-service1-s3-service' }} \
+          --query taskDefinition > task-definition.json
+
+    - name: Create initial task definition if it doesn't exist
+      if: steps.download-task-def.outcome == 'failure'
+      run: |
+        AWS_ACCOUNT_ID=$(echo "${{ steps.login-ecr.outputs.registry }}" | cut -d'.' -f1)
+        cat > task-definition.json <<EOF
+        {
+          "family": "${{ vars.S3_TASK_DEF || 'ecs-multi-service1-s3-service' }}",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service1-ecs-task-execution-role",
+          "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service1-ecs-task-role",
+          "containerDefinitions": [
+            {
+              "name": "${{ vars.S3_CONTAINER_NAME || 's3-app' }}",
+              "image": "${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:${{ github.sha }}",
+              "essential": true,
+              "portMappings": [
+                {
+                  "containerPort": 5001,
+                  "protocol": "tcp"
+                }
+              ],
+              "environment": [
+                {
+                  "name": "AWS_REGION",
+                  "value": "${{ vars.AWS_REGION || 'us-east-1' }}"
+                }
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/ecs-multi-service1/s3-service",
+                  "awslogs-region": "${{ vars.AWS_REGION || 'us-east-1' }}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ]
+        }
+        EOF
+
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition.json
+        container-name: ${{ vars.S3_CONTAINER_NAME || 's3-app' }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:${{ github.sha }}
+
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ vars.S3_ECS_SERVICE || 's3-service' }}
+        cluster: ${{ vars.ECS_CLUSTER || 'ecs-multi-service1-cluster' }}
+        wait-for-service-stability: true
+      continue-on-error: true
+      id: deploy
+
+    - name: Check deployment status
+      if: steps.deploy.outcome == 'failure'
+      run: |
+        echo "::warning::ECS deployment failed. This might be because:"
+        echo "::warning::1. The ECS cluster doesn't exist yet - run Terraform first"
+        echo "::warning::2. The ECS service doesn't exist - run Terraform first"
+        echo "::warning::3. IAM roles are missing - ensure Terraform has been applied"
+        echo ""
+        echo "To fix this, run the following commands:"
+        echo "  cd terraform"
+        echo "  terraform init"
+        echo "  terraform apply"
+        exit 1
