@@ -117,3 +117,19 @@ jobs:
         service: ${{ vars.S3_ECS_SERVICE || 's3-service' }}
         cluster: ${{ vars.ECS_CLUSTER || 'ecs-multi-service-cluster' }}
         wait-for-service-stability: true
+      continue-on-error: true
+      id: deploy
+
+    - name: Check deployment status
+      if: steps.deploy.outcome == 'failure'
+      run: |
+        echo "::warning::ECS deployment failed. This might be because:"
+        echo "::warning::1. The ECS cluster doesn't exist yet - run Terraform first"
+        echo "::warning::2. The ECS service doesn't exist - run Terraform first"
+        echo "::warning::3. IAM roles are missing - ensure Terraform has been applied"
+        echo ""
+        echo "To fix this, run the following commands:"
+        echo "  cd terraform"
+        echo "  terraform init"
+        echo "  terraform apply"
+        exit 1
