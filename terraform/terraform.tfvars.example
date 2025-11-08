@@ -2,7 +2,7 @@
 aws_region = "us-east-1"
 
 # Project name - This will be used as a prefix for all resources
-project_name = "ecs-multi-service1"
+project_name = "yeefei-ecs-multi-svc"
 
 # Existing VPC name to use
 vpc_name = "ce11-tf-vpc-97"

@@ -47,6 +47,7 @@ jobs:
       working-directory: ./terraform
       run: |
         terraform apply -auto-approve \
+          -var="project_name=yeefei-ecs-multi-svc" \
           -var="s3_service_image=${{ steps.account-id.outputs.account_id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:latest" \
           -var="sqs_service_image=${{ steps.account-id.outputs.account_id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ vars.SQS_ECR_REPOSITORY || 'sqs-service' }}:latest"
 
