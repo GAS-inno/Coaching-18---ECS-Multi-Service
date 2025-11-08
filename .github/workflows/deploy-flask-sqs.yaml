@@ -36,9 +36,18 @@ jobs:
       working-directory: ./terraform
       run: terraform init
 
+    - name: Get AWS Account ID
+      id: account-id
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+
     - name: Terraform Apply
       working-directory: ./terraform
-      run: terraform apply -auto-approve
+      run: |
+        terraform apply -auto-approve \
+          -var="s3_service_image=${{ steps.account-id.outputs.account_id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:latest" \
+          -var="sqs_service_image=${{ steps.account-id.outputs.account_id }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-1' }}.amazonaws.com/${{ vars.SQS_ECR_REPOSITORY || 'sqs-service' }}:latest"
 
   deploy:
     name: Deploy SQS Service
