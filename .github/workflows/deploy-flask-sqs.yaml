@@ -36,13 +36,9 @@ jobs:
       working-directory: ./terraform
       run: terraform init
 
-    - name: Terraform Plan
-      working-directory: ./terraform
-      run: terraform plan -out=tfplan
-
     - name: Terraform Apply
       working-directory: ./terraform
-      run: terraform apply -auto-approve tfplan
+      run: terraform apply -auto-approve
 
   deploy:
     name: Deploy SQS Service
