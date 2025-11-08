@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name to be used as a prefix for all resources"
   type        = string
-  default     = "ecs-multi-service"
+  default     = "ecs-multi-service1"
 }
 
 variable "vpc_name" {

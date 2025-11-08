@@ -96,7 +96,7 @@ jobs:
       continue-on-error: true
       run: |
         aws ecs describe-task-definition \
-          --task-definition ${{ vars.SQS_TASK_DEF || 'ecs-multi-service-sqs-service' }} \
+          --task-definition ${{ vars.SQS_TASK_DEF || 'ecs-multi-service1-sqs-service' }} \
           --query taskDefinition > task-definition.json
 
     - name: Create initial task definition if it doesn't exist
@@ -105,13 +105,13 @@ jobs:
         AWS_ACCOUNT_ID=$(echo "${{ steps.login-ecr.outputs.registry }}" | cut -d'.' -f1)
         cat > task-definition.json <<EOF
         {
-          "family": "${{ vars.SQS_TASK_DEF || 'ecs-multi-service-sqs-service' }}",
+          "family": "${{ vars.SQS_TASK_DEF || 'ecs-multi-service1-sqs-service' }}",
           "networkMode": "awsvpc",
           "requiresCompatibilities": ["FARGATE"],
           "cpu": "256",
           "memory": "512",
-          "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service-ecs-task-execution-role",
-          "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service-ecs-task-role",
+          "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service1-ecs-task-execution-role",
+          "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service1-ecs-task-role",
           "containerDefinitions": [
             {
               "name": "${{ vars.SQS_CONTAINER_NAME || 'sqs-app' }}",
@@ -132,7 +132,7 @@ jobs:
               "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                  "awslogs-group": "/ecs/ecs-multi-service/sqs-service",
+                  "awslogs-group": "/ecs/ecs-multi-service1/sqs-service",
                   "awslogs-region": "${{ vars.AWS_REGION || 'us-east-1' }}",
                   "awslogs-stream-prefix": "ecs"
                 }
@@ -155,7 +155,7 @@ jobs:
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
         service: ${{ vars.SQS_ECS_SERVICE || 'sqs-service' }}
-        cluster: ${{ vars.ECS_CLUSTER || 'ecs-multi-service-cluster' }}
+        cluster: ${{ vars.ECS_CLUSTER || 'ecs-multi-service1-cluster' }}
         wait-for-service-stability: true
       continue-on-error: true
       id: deploy
