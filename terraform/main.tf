@@ -495,7 +495,8 @@ module "ecs" {
       }
 
       # Network configuration
-      subnet_ids = data.aws_subnets.private.ids
+      subnet_ids         = data.aws_subnets.private.ids
+      assign_public_ip   = true
       security_group_rules = {
         alb_ingress = {
           type                     = "ingress"
@@ -546,7 +547,8 @@ module "ecs" {
       }
 
       # Network configuration
-      subnet_ids = data.aws_subnets.private.ids
+      subnet_ids         = data.aws_subnets.private.ids
+      assign_public_ip   = true
       security_group_rules = {
         alb_ingress = {
           type                     = "ingress"
