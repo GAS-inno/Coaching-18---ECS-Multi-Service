@@ -450,11 +450,11 @@ module "ecs" {
       }
 
       # Task definition
-      requires_compatibilities = ["FARGATE"]
-      task_exec_iam_role_arn   = aws_iam_role.ecs_task_execution_role.arn
-      task_exec_iam_role_name  = aws_iam_role.ecs_task_execution_role.name
-      tasks_iam_role_arn       = aws_iam_role.ecs_task_role.arn
-      tasks_iam_role_name      = aws_iam_role.ecs_task_role.name
+      requires_compatibilities     = ["FARGATE"]
+      create_task_exec_iam_role    = false
+      task_exec_iam_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+      create_tasks_iam_role        = false
+      tasks_iam_role_arn           = aws_iam_role.ecs_task_role.arn
 
       # Service configuration
       desired_count = 1
@@ -535,11 +535,11 @@ module "ecs" {
       }
 
       # Task definition
-      requires_compatibilities = ["FARGATE"]
-      task_exec_iam_role_arn   = aws_iam_role.ecs_task_execution_role.arn
-      task_exec_iam_role_name  = aws_iam_role.ecs_task_execution_role.name
-      tasks_iam_role_arn       = aws_iam_role.ecs_task_role.arn
-      tasks_iam_role_name      = aws_iam_role.ecs_task_role.name
+      requires_compatibilities     = ["FARGATE"]
+      create_task_exec_iam_role    = false
+      task_exec_iam_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+      create_tasks_iam_role        = false
+      tasks_iam_role_arn           = aws_iam_role.ecs_task_role.arn
 
       # Service configuration
       desired_count = 1
