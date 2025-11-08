@@ -52,10 +52,54 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Download task definition
+      id: download-task-def
+      continue-on-error: true
       run: |
         aws ecs describe-task-definition \
           --task-definition ${{ vars.S3_TASK_DEF || 'ecs-multi-service-s3-service' }} \
           --query taskDefinition > task-definition.json
+
+    - name: Create initial task definition if it doesn't exist
+      if: steps.download-task-def.outcome == 'failure'
+      run: |
+        cat > task-definition.json <<EOF
+        {
+          "family": "${{ vars.S3_TASK_DEF || 'ecs-multi-service-s3-service' }}",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "executionRoleArn": "arn:aws:iam::${{ steps.login-ecr.outputs.registry | split('.') | first }}:role/ecs-multi-service-ecs-task-execution-role",
+          "taskRoleArn": "arn:aws:iam::${{ steps.login-ecr.outputs.registry | split('.') | first }}:role/ecs-multi-service-ecs-task-role",
+          "containerDefinitions": [
+            {
+              "name": "${{ vars.S3_CONTAINER_NAME || 's3-app' }}",
+              "image": "${{ steps.login-ecr.outputs.registry }}/${{ vars.S3_ECR_REPOSITORY || 's3-service' }}:${{ github.sha }}",
+              "essential": true,
+              "portMappings": [
+                {
+                  "containerPort": 5001,
+                  "protocol": "tcp"
+                }
+              ],
+              "environment": [
+                {
+                  "name": "AWS_REGION",
+                  "value": "${{ vars.AWS_REGION || 'us-east-1' }}"
+                }
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/ecs-multi-service/s3-service",
+                  "awslogs-region": "${{ vars.AWS_REGION || 'us-east-1' }}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ]
+        }
+        EOF
 
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
