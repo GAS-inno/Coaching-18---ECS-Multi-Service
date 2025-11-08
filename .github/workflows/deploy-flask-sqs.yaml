@@ -62,6 +62,7 @@ jobs:
     - name: Create initial task definition if it doesn't exist
       if: steps.download-task-def.outcome == 'failure'
       run: |
+        AWS_ACCOUNT_ID=$(echo "${{ steps.login-ecr.outputs.registry }}" | cut -d'.' -f1)
         cat > task-definition.json <<EOF
         {
           "family": "${{ vars.SQS_TASK_DEF || 'ecs-multi-service-sqs-service' }}",
@@ -69,8 +70,8 @@ jobs:
           "requiresCompatibilities": ["FARGATE"],
           "cpu": "256",
           "memory": "512",
-          "executionRoleArn": "arn:aws:iam::${{ steps.login-ecr.outputs.registry | split('.') | first }}:role/ecs-multi-service-ecs-task-execution-role",
-          "taskRoleArn": "arn:aws:iam::${{ steps.login-ecr.outputs.registry | split('.') | first }}:role/ecs-multi-service-ecs-task-role",
+          "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service-ecs-task-execution-role",
+          "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecs-multi-service-ecs-task-role",
           "containerDefinitions": [
             {
               "name": "${{ vars.SQS_CONTAINER_NAME || 'sqs-app' }}",
